@@ -1,26 +1,42 @@
 #ifndef PID_H
 #define PID_H
 
+#include <valarray>
+
 class PID {
+private:
+  bool isInitialized, isOptimize;
+  std::valarray<double> error_; // PID errors
+  std::valarray<double> K_; // PID coeeficients
+  double dt; // time interval between frames
+  double prev_cte; //CTE in previous frame
+  
+  //parameters for twiddle optimization :
+  bool isBaseline; // true for the first run in twiddle algorithm 
+  double tol, fpi; //tol:tolerance, fpi:frames per iteration
+  std::valarray <double> dK_; //change in gain parameters for twiddle 
+  int para_index; // index of parameter space to update
+  double current_err; // current error in twiddle algorithm
+  double best_err; // best (min) error in twiddle algorithm
+  std::valarray<double> status;
+
 public:
+  int counter;
+  double total_error;
+
   /*
   * Errors
   */
-  double p_error;
-  double i_error;
-  double d_error;
+  std::valarray<double> error(); 
 
   /*
   * Coefficients
   */ 
-  double Kp;
-  double Ki;
-  double Kd;
-
+  std::valarray<double> K();
   /*
   * Constructor
   */
-  PID();
+  PID(std::valarray<double> para, double delta_t);
 
   /*
   * Destructor.
@@ -30,17 +46,17 @@ public:
   /*
   * Initialize PID.
   */
-  void Init(double Kp, double Ki, double Kd);
+  void reset();
+
+  void optimize(double tolerance, int fpi, std::valarray<double> K_step);
 
   /*
   * Update the PID error variables given cross track error.
   */
   void UpdateError(double cte);
 
-  /*
-  * Calculate the total PID error.
-  */
-  double TotalError();
+  void twiddle();
+  void scan();
 };
 
 #endif /* PID_H */
