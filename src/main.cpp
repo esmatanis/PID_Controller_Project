@@ -2,7 +2,13 @@
 #include <iostream>
 #include "json.hpp"
 #include "PID.h"
+#include "filter.h"
+#include "deadband.h"
+#include "twiddle.h"
 #include <math.h>
+
+using Eigen::VectorXd;
+using namespace std;
 
 // for convenience
 using json = nlohmann::json;
@@ -33,9 +39,41 @@ int main()
   uWS::Hub h;
 
   PID pid;
+  deadband DB_steer;
+  deadband DB_cte;
+  filter FIL_str;
+  filter FIL_throttle;
+  twiddle twiddle_tune;
   // TODO: Initialize the pid variable.
 
-  h.onMessage([&pid](uWS::WebSocket<uWS::SERVER> ws, char *data, size_t length, uWS::OpCode opCode) {
+  VectorXd Params = VectorXd(5);
+
+  double Kp = 0.1;
+  double Ki = 0.0004;
+  double Kd = 2;
+  double collecting = 1;
+  double increase  = 1;
+  double set_speed =75;
+  double max_speed = 0;
+
+
+
+  Params<<Kp,Ki,Kd,.2,4;
+  cout<<Params;
+  twiddle_tune.Init(0.8,100,set_speed,Params);
+
+  pid.Init(Kp, Ki, Kd); // Values taken from lecture
+
+  DB_steer.Init(0.25,40);
+  DB_cte.Init(0.25,20);
+  FIL_str.Init(.99);
+  FIL_throttle.Init(.99);
+  twiddle_tune.changeParam(1,Params);
+
+  h.onMessage([&pid,&DB_steer, &DB_cte, &FIL_str,&twiddle_tune,&Params,&Kp,&Kd,&Ki,
+    &collecting,&increase,&set_speed,&max_speed,
+    &FIL_throttle](uWS::WebSocket<uWS::SERVER> ws, char *data, size_t length,
+      uWS::OpCode opCode) {
     // "42" at the start of the message means there's a websocket message event.
     // The 4 signifies a websocket message
     // The 2 signifies a websocket event
@@ -54,18 +92,62 @@ int main()
           /*
           * TODO: Calcuate steering value here, remember the steering value is
           * [-1, 1].
+
           * NOTE: Feel free to play around with the throttle and speed. Maybe use
           * another PID controller to control the speed!
           */
-          
-          // DEBUG
-          std::cout << "CTE: " << cte << " Steering Value: " << steer_value << std::endl;
+          pid.UpdateError(cte);
+
+          steer_value = pid.TotalError();
+          steer_value = FIL_str.smooth(steer_value);
+
+          FIL_str.savePrevious(steer_value);
+
+          double throtte_value = 0.3;
+          throtte_value = (set_speed - speed)*Params[3] - cte*Params[4];
+
+          throtte_value += DB_steer.deadband_control(steer_value);
+          throtte_value += DB_cte.deadband_control(cte);
+
+          //throtte_value = 0.3;
+
+          throtte_value = FIL_throttle.smooth(throtte_value);
+
+          if (max_speed<speed){max_speed = speed;}
+
+
+          if (throtte_value>1){throtte_value = 1;}
+          if (throtte_value<-1){throtte_value = -1;}
+          if (speed<35){throtte_value = 0.35;}
+          FIL_throttle.savePrevious(throtte_value);
+          //throtte_value = 0.3;
+
+          twiddle_tune.calcError(cte,speed);
+
+
+          if (twiddle_tune.countIter()==40){
+
+            Params = twiddle_tune.updateparameters();
+            Kp = Params[0];
+            Ki = Params[1];
+            Kd = Params[2];
+            pid.Init(Kp, Ki, Kd);
+            twiddle_tune.setCount(0);
+            cout<<"Max_Speed = "<<max_speed<<endl;
+
+
+          }
+
+
+
+
+          //std::cout << "CTE: " << cte << " Steering Value: " << steer_value << std::endl;
 
           json msgJson;
           msgJson["steering_angle"] = steer_value;
-          msgJson["throttle"] = 0.3;
+          msgJson["throttle"] = throtte_value;
           auto msg = "42[\"steer\"," + msgJson.dump() + "]";
-          std::cout << msg << std::endl;
+          //std::cout << msg << std::endl;
           ws.send(msg.data(), msg.length(), uWS::OpCode::TEXT);
         }
       } else {

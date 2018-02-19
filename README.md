@@ -1,49 +1,84 @@
-# Controls-PID
+# CarND-Controls-PID
 Self-Driving Car Engineer Nanodegree Program
 
-For installation, please read `Dependencies.md`
+---
 
+## Dependencies
 
-# Steering controller
-Steering control is implemented in `src/main.cpp` which uses `pid` class (implemented in `pid.cpp`). Steering angle using a PID controller is given by :
+* cmake >= 3.5
+ * All OSes: [click here for installation instructions](https://cmake.org/install/)
+* make >= 4.1
+  * Linux: make is installed by default on most Linux distros
+  * Mac: [install Xcode command line tools to get make](https://developer.apple.com/xcode/features/)
+  * Windows: [Click here for installation instructions](http://gnuwin32.sourceforge.net/packages/make.htm)
+* gcc/g++ >= 5.4
+  * Linux: gcc / g++ is installed by default on most Linux distros
+  * Mac: same deal as make - [install Xcode command line tools]((https://developer.apple.com/xcode/features/)
+  * Windows: recommend using [MinGW](http://www.mingw.org/)
+* [uWebSockets](https://github.com/uWebSockets/uWebSockets) == 0.13, but the master branch will probably work just fine
+  * Follow the instructions in the [uWebSockets README](https://github.com/uWebSockets/uWebSockets/blob/master/README.md) to get setup for your platform. You can download the zip of the appropriate version from the [releases page](https://github.com/uWebSockets/uWebSockets/releases). Here's a link to the [v0.13 zip](https://github.com/uWebSockets/uWebSockets/archive/v0.13.0.zip).
+  * If you run OSX and have homebrew installed you can just run the ./install-mac.sh script to install this
+* Simulator. You can download these from the [project intro page](https://github.com/udacity/CarND-PID-Control-Project/releases) in the classroom.
 
-```
-Steer_angle = - (K_p * error_p + K_i * error_i + K_d * error_d)  
-```   
+## Basic Build Instructions
 
-Here, K_p, K_i, K_d are the gains for PID components. error_p is the cross-track error (CTE), error_i is the integral of CTE and error_d is the differential of CTE.
+1. Clone this repo.
+2. Make a build directory: `mkdir build && cd build`
+3. Compile: `cmake .. && make`
+4. Run it: `./pid`. 
 
-There are a few scalings performed beforehand. Firstly, the CTE is divided by a factor of 8. This ensures that steering angle approximately lies between -1 and 1 for `K_p ~ 1` and makes tuning easier later on. Further, `error_i` is multiplied by a factor `dt` and `error_d` is divided by a factor `dt`. I chose`dt = 0.07` which then ensures that `K_i` and `K_d` are also approximately 1 in order to achieve steering angle between -1 and 1.
+## Editor Settings
 
-Now, starting with `K_p = K_i = K_d = 1`, I find that the car in simulation already manages to stay on track! (although oscillating considerably). To understand the effect of each component, first I turn off `K_i` and `K_d`. Here is the video in presence of only P component :
+We've purposefully kept editor configuration files out of this repo in order to
+keep it as simple and environment agnostic as possible. However, we recommend
+using the following settings:
 
-  [![P only](http://img.youtube.com/vi/sfclZrJ0daI/0.jpg)](http://www.youtube.com/watch?v=sfclZrJ0daI)
- 
- As seen in the video above, the car starts oscillating wildly before running off the track. This oscillatory behavior is expected with proportional control. Next, I turn on D component. The oscillations go down compared to P-only case and car makes it to  a much farther distance before running off the track. Here is a video demonstarting how far the car makes it with P and D : 
- 
- [![P and D](http://img.youtube.com/vi/F6vCwze9AFI/0.jpg)](http://www.youtube.com/watch?v=F6vCwze9AFI)
- 
- Finally, turning on all P,I,D components, car is able to complete full lap although still oscillating considerbaly. Final step is tuning the gain parameters while achieving maximum speed possible. I set a constant `throttle = 0.45` and tuned gain parameters using twiddle algorithm which is implemented in the `pid.optimize` function. Because the total error (i.e CTE squared) can vary significantly across different patches of the track, each step in the twiddle algorithm is evaluated across full lap making the entire process time consuming. To solve this problem, `pid.optimize` function performs optimization in real time during simulation improving the gain parameters at each lap. Final gain parameters were chosen to be `K_p = K_i = K_d = 0.35`. The car was able to achieve a maximum speed of **52 mph** using a constant throttle of 0.45 while managing to stay on track (as observed for 20 laps). Here is the full video for one lap :   
-  [![PID steering](http://img.youtube.com/vi/SrHDlw_z_qw/0.jpg)](http://www.youtube.com/watch?v=SrHDlw_z_qw)
-  
-  
-# Thottle controller
+* indent using spaces
+* set tab width to 2 spaces (keeps the matrices in source code aligned)
 
-To achieve maximum possible speed, I have implemented a P-controller for throttle. This part is implemented in `src/main_extra.cpp` (please modify makefile to compile or simply rename this file to `src/main.cpp`). There are a few modifications I have made to deal with high speeds. Firstly, note that steering angle compensation needed at high speeds is smaller compared to that at low speeds, otherwise the car goes out of control. To this end, I have modified CTE for steering angle as follows :
+## Code Style
 
-```
-CTE_new = CTE/8 * max(0.15, 1 - speed/80) 
-```   
-With this formula, CTE is much smaller at high speeds. 
+Please (do your best to) stick to [Google's C++ style guide](https://google.github.io/styleguide/cppguide.html).
 
-Next for throttle controller, I have used the same `pid` class as that for steering but only included P-component. The 'CTE' for throttle is defined as follows :
-```
-CTE_throttle = (|steer_angle|/5 + |CTE|) * speed/60 
-                 + (speed - 100)/25
-```   
-In the first line, the idea is that throttle error should be proportional to the absolute value of steering angle and absolute value of CTE. The logic for multilplying by speed is as follows. Lets imagine a situation where the car is barely moving and yet it is far away form center of track so that CTE is large. In that case, we do not want throttle to be small even though CTE is large, otherwise car will never move and recover.  The second line has the term `(speed - 100)` which ensures when steering angle and CTE are small, the car will try to speed until it reaches max speed of 100 mph. The coefficients of various terms were manually tuned and gain parameters set to  `K_p = K_i = K_d = 1` for steering and  `K_p = 2.2`,  `K_i = K_d = 0` for throttle, although there is scope for improvement using twiddle algorithm. Here is the final video :    
+## Project Instructions and Rubric
 
- [![PID steering](http://img.youtube.com/vi/e2h3u3X-RCc/0.jpg)](http://www.youtube.com/watch?v=e2h3u3X-RCc)
-  
-  
- Car manages to stay on track (as observed for 20 laps) achieving top speed between **75-85 mph** for each lap.
+Note: regardless of the changes you make, your project must be buildable using
+cmake and make!
+
+More information is only accessible by people who are already enrolled in Term 2
+of CarND. If you are enrolled, see [the project page](https://classroom.udacity.com/nanodegrees/nd013/parts/40f38239-66b6-46ec-ae68-03afd8a601c8/modules/f1820894-8322-4bb3-81aa-b26b3c6dcbaf/lessons/e8235395-22dd-4b87-88e0-d108c5e5bbf4/concepts/6a4d8d42-6a04-4aa6-b284-1697c0fd6562)
+for instructions and the project rubric.
+
+## Hints!
+
+* You don't have to follow this directory structure, but if you do, your work
+  will span all of the .cpp files here. Keep an eye out for TODOs.
+
+## Call for IDE Profiles Pull Requests
+
+Help your fellow students!
+
+We decided to create Makefiles with cmake to keep this project as platform
+agnostic as possible. Similarly, we omitted IDE profiles in order to we ensure
+that students don't feel pressured to use one IDE or another.
+
+However! I'd love to help people get up and running with their IDEs of choice.
+If you've created a profile for an IDE that you think other students would
+appreciate, we'd love to have you add the requisite profile files and
+instructions to ide_profiles/. For example if you wanted to add a VS Code
+profile, you'd add:
+
+* /ide_profiles/vscode/.vscode
+* /ide_profiles/vscode/README.md
+
+The README should explain what the profile does, how to take advantage of it,
+and how to install it.
+
+Frankly, I've never been involved in a project with multiple IDE profiles
+before. I believe the best way to handle this would be to keep them out of the
+repo root to avoid clutter. My expectation is that most profiles will include
+instructions to copy files to a new location to get picked up by the IDE, but
+that's just a guess.
+
+One last note here: regardless of the IDE used, every submitted project must
+still be compilable with cmake and make./
