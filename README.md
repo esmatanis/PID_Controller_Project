@@ -1,4 +1,65 @@
-# CarND-Controls-PID
+
+## PID control for self-driving car
+
+A better version with equations can be found [here](http://nbviewer.jupyter.org/github/vxy10/P4T2SCND_PIDControl/blob/master/Readme.ipynb)
+
+In this project, I implemented a PID (Proportional-Integral-Derivative) control for letting a car drive around a race track. PID control is a simple control scheme where the error between desired and true state is taken as input, and its value, integral and derivatives are multipled by scalars to compute the commanded control input. The proportional term drives the error to zero, however, this results in error oscillating about the set point. To supress these oscillations a derivative term is introduced. Finally, due to modeling errors, set point not being zero or other errors, a control based on proportional and derivative term alone can have a drift. To avoid this drift, an integral term is introduced. The integral term accumulates error, and pushes the control in the opposite direction of accumulated error. This results in the steady state offset error to go to zero. PID control was tested by controlling a car driving around in a Unity simulator. The car simulator was provided by Udacity. The simulator returned cross track error and took throttle opening and steering angle as control inputs. I implemented two modes of control, first a simple/safe mode where the car drives around the track without touching the yellow lines, and second a Fast mode where the car drives around the race track to achieve maximum speed. In simulation, I was able to acheive a maximum speed of 78 mph. This mode however resulted in the car touching edges of the road in some occasions. Below I present control sysnthesis for each mode. 
+
+### Safe mode: 
+
+In safe mode, the objective was to drive around the track at a safe speed while not touching sides of the road. I therefore held throttle fixed at 0.3 and implemented a PID control that took cross track error as input and gave commanded steering angle as output. This control law can simply be written as, 
+
+$$ Steering~angle = - \underbrace{K_p~ cte}_{proportional} - \underbrace{K_i~ \int cte ~dt}_{integral} - K_d \underbrace{\frac{d ~cte}{dt}}_{derivative} $$ 
+
+The gains were manually tuned and set as, $K_p = 0.225$, $K_i = 0.0004$, and $K_d = 4$. The throttle was set to 0.3. The results of applying PID control for safe mode are presented in video below. As evident, the car does not cross the yellow lines.  
+
+#### PID control for autonomous driving (Safe Mode) 
+
+[![IMAGE ALT TEXT HERE](https://img.youtube.com/vi/6CAoqJl8_2w/0.jpg)](https://www.youtube.com/watch?v=6CAoqJl8_2w)
+
+
+### Fast mode:
+
+In the Fast mode, I implemented control laws to command the throttle in addition to steering. As the objective was to go as fast as possible, the gains were set differently. I implemented a control for steering same as before,  
+
+$$ Steering~angle = - \underbrace{K_p~ cte}_{proportional} - \underbrace{K_i~ \int cte ~dt}_{integral} - K_d \underbrace{\frac{d ~cte}{dt}}_{derivative} . $$ 
+
+The throttle control was implemented as, 
+
+$$ Throttle = K_{sp}(speed_{desired} - speed)- K_s (Steering~angle) - DB_{steer}- DB_{cte} $$ 
+
+where, $K_{sp}$ defines a proportional controller for speed, $K_s$ a factor to allow slowing down for large steering angles, and DB stands for deadband controllers. Deadband controllers are controllers that act like a proportional controller, but have a dead-zone around zero error where control output is zero. The idea is to make a 'channel' to constraint the errors in. A simple deadzone controller for $x$ with deadzone given by $x_{db}$ can be implemented as, 
+
+$$ f(x)= 
+\begin{cases}
+       -K(x-x_{db}) ,& \text{if }x \geq x_{db} \\
+    0,           & \text{if} x_{db} \geq x \geq -x_{db} \\
+    -K(x+x_{db}) ,& \text{if } - x_{db} \geq x 
+\end{cases} $$ 
+
+
+Deadband control has many benefits, most important being they prevent control chatter. In addition they can be useful to contrain error within certain bounds. All this is however true for a purely linear system, when interacting with a nonlinear system, a poorly designed deadband control can introduce unnecessary oscillations. For steering and throttle, the deadband was set to 0.35 and gains were set to 40 and 20 respectively. 
+
+This control model had a total of 5 parameters, the 3 gains for PID control of steering and 2 gains for throttle control. These gains were initially set as $K_p = 0.1$, $K_i = 0.0004$, $K_d = 2$, $K_s = 2$  and $K_{sp} = 0.2$. A Twiddle algorithm with look window of 40 time points was implemented. As the error is not expected to be the same for different parts of the track, a discounted error function was implemented as follows. First cost at instant $i$ was computed,
+
+$$  cost_i  = 0.05 \frac{(speed_{desired} - speed_i)^2}{speed_{desired}^2}  + cte_i^2$$
+
+next all the previous costs were accumulated as 
+
+$$  Objective_i  = cost_i + 0.8 Objective_{i-1}$$
+
+The Twiddle algorithm tried to tune gains to minimize this objective function. Video below presents results of applying this control scheme to acheive a maximum speed of 80 mph. 
+
+
+#### PID control for autonomous driving (78 mph run) 
+[![IMAGE ALT TEXT HERE](https://img.youtube.com/vi/Zcfcy_gxqA0/0.jpg)](https://www.youtube.com/watch?v=Zcfcy_gxqA0)
+
+
+
+Disclaimer: The high speed in fast mode came at the expense of complexity, where I implemented a deadband controller, twiddle, and filters for steering angle and throttle. The main purpose of doing so was for me to practice coding using OOP framework, hence the added complexity. 
+
+
+# CarND-Controls-PID Environment settings. 
 Self-Driving Car Engineer Nanodegree Program
 
 ---
@@ -82,3 +143,8 @@ that's just a guess.
 
 One last note here: regardless of the IDE used, every submitted project must
 still be compilable with cmake and make./
+
+
+```python
+
+```
